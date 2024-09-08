@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sensor Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+  </head>
+  <body>
+    <h1>Real-time Sensor Data</h1>
+
+    <h2>Non-GPS Sensor Data</h2>
+    <div id="sensorChart" style="width: 100%; height: 500px"></div>
+
+    <h2>GPS Sensor Data</h2>
+    <div id="gpsChart" style="width: 100%; height: 500px"></div>
+
+    <script>
+      const socket = io();
+
+      // Data for regular sensors
+      let sensorData = {
+        x: [],
+        y: [],
+        type: "scatter",
+        mode: "lines+markers",
+        name: "Sensor Value",
+      };
+
+      // Data for GPS sensors
+      let gpsData = {
+        type: "scattergeo",
+        mode: "markers+text",
+        marker: {
+          size: 7,
+          color: [
+            "#bebada",
+            "#fdb462",
+            "#fb8072",
+            "#d9d9d9",
+            "#bc80bd",
+            "#b3de69",
+            "#8dd3c7",
+            "#80b1d3",
+            "#fccde5",
+            "#ffffb3",
+          ],
+          line: {
+            width: 1,
+          },
+        },
+        lat: [],
+        lon: [],
+        text: [],
+      };
+
+      let layoutSensors = {
+        title: "Non-GPS Sensor Data Over Time",
+        xaxis: { title: "Time" },
+        yaxis: { title: "Sensor Value" },
+      };
+
+      let layoutGPS = {
+        title: "GPS Sensor Data (Locations)",
+        geo: {
+          scope: "world",
+          projection: { type: "equirectangular" },
+          showland: true,
+          landcolor: "rgb(217, 217, 217)",
+        },
+      };
+
+      Plotly.newPlot("sensorChart", [sensorData], layoutSensors);
+      Plotly.newPlot("gpsChart", [gpsData], layoutGPS);
+
+      socket.on("sensorData", function (data) {
+        const currentTime = new Date().toLocaleTimeString();
+
+        if (data.location) {
+          // If the data contains GPS coordinates
+          gpsData.lat.push(data.location.latitude);
+          gpsData.lon.push(data.location.longitude);
+          gpsData.text.push(data.sensorName);
+          Plotly.update("gpsChart", { lat: [gpsData.lat], lon: [gpsData.lon], text: [gpsData.text] });
+        } else {
+          // If the data is a regular sensor value
+          sensorData.x.push(currentTime);
+          sensorData.y.push(data.value);
+          Plotly.update("sensorChart", { x: [sensorData.x], y: [sensorData.y] });
+        }
+      });
+    </script>
+  </body>
+</html>
