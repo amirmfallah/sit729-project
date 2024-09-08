@@ -83,7 +83,7 @@ To run the project locally, ensure that you have the following installed:
 
 ## Demo
 
-![demo](https://github.com/user-attachments/assets/1b060a5c-1baa-47b1-bacd-eab33e0a31a0)
+![demo](https://github.com/user-attachments/assets/edabb043-c2d5-417d-8644-cf18415cc70c)
 
 
 _This is an example of a screenshot of the real-time dashboard showing sensor data._
