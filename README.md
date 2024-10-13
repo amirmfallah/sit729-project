@@ -160,7 +160,7 @@ The web-based dashboard allows operators to:
 
 ## **Screenshots**
 
-_(Add screenshots of the dashboard views: unit list, unit information, and command history.)_
+![Screenshot 2024-10-13 at 18 48 38](https://github.com/user-attachments/assets/8ea1a154-5799-428c-8ca6-2d83bd7bba17)
 
 ---
 
