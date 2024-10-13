@@ -1,0 +1,167 @@
+[
+    {
+        "id": "3334e49d4b1413e4",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "monitor-location",
+        "type": "function",
+        "z": "3334e49d4b1413e4",
+        "name": "Monitor Location",
+        "func": "const haversine = (lat1, lon1, lat2, lon2) => {\n    const R = 6371; // Radius of Earth in km\n    const toRad = (deg) => deg * (Math.PI / 180);\n\n    const dLat = toRad(lat2 - lat1);\n    const dLon = toRad(lon2 - lon1);\n\n    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +\n              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *\n              Math.sin(dLon / 2) * Math.sin(dLon / 2);\n    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));\n\n    return R * c; // Distance in km\n};\n\nconst baseLat = -37.85;\nconst baseLon = 145.115;\n\nconst { unitId, gps } = msg.payload;\nconst { lat, lon } = gps;\n\nconst distance = haversine(baseLat, baseLon, parseFloat(lat), parseFloat(lon));\n\nnode.status({ text: `Distance: ${distance.toFixed(2)} km` });\n\nif (distance > 1) {\n    msg.payload = {\n        unitId: unitId,\n        command: \"triggerAlarm\",\n        payload: { trigger: true, reason: \"Location Out of Range\" }\n    };\n    return [msg, null];\n} else {\n    return [null, msg];\n}",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1130,
+        "y": 1080,
+        "wires": [
+            [
+                "http-request-node"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "monitor-speed",
+        "type": "function",
+        "z": "3334e49d4b1413e4",
+        "name": "Monitor Speed",
+        "func": "const speedThreshold = 80; // Speed limit in km/h\n\nconst { unitId, speed } = msg.payload;\n\nnode.status({ text: `Speed: ${speed} km/h` });\n\nif (parseFloat(speed) > 100) {\n    msg.payload = {\n        unitId: unitId,\n        command: \"triggerAlarm\",\n        payload: { trigger: true, reason: \"Speed Limit Exceeded\" }\n    };\n    return [msg, null];\n} else {\n    return [null, msg];\n}",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1120,
+        "y": 1160,
+        "wires": [
+            [
+                "http-request-node"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "monitor-temp",
+        "type": "function",
+        "z": "3334e49d4b1413e4",
+        "name": "Monitor Temperature",
+        "func": "const tempMin = 10; // Minimum acceptable temperature in °C\nconst tempMax = 35; // Maximum acceptable temperature in °C\n\nconst { unitId, temperature } = msg.payload;\n\nnode.status({ text: `Temperature: ${temperature} °C` });\n\n\nif (parseFloat(temperature) < tempMin || parseFloat(temperature) > tempMax) {\n    msg.payload = {\n        unitId: unitId,\n        command: \"triggerAlarm\",\n        payload: { trigger: true, reason: \"Temperature Out of Range\" }\n    };\n    return [msg, null];\n} else {\n    return [null, msg];\n}",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1140,
+        "y": 1240,
+        "wires": [
+            [
+                "http-request-node"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "http-request-node",
+        "type": "http request",
+        "z": "3334e49d4b1413e4",
+        "name": "Trigger Alarm API",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://sit729-1604877711.us-east-1.elb.amazonaws.com/api/unit/command",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1470,
+        "y": 1160,
+        "wires": [
+            [
+                "abcd03c0ed568a7a"
+            ]
+        ]
+    },
+    {
+        "id": "a5386329ee215590",
+        "type": "mqtt in",
+        "z": "3334e49d4b1413e4",
+        "name": "",
+        "topic": "military/+/data",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "59df6be4f5f50d0f",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 810,
+        "y": 1160,
+        "wires": [
+            [
+                "monitor-location",
+                "monitor-speed",
+                "monitor-temp"
+            ]
+        ]
+    },
+    {
+        "id": "abcd03c0ed568a7a",
+        "type": "debug",
+        "z": "3334e49d4b1413e4",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1660,
+        "y": 1160,
+        "wires": []
+    },
+    {
+        "id": "59df6be4f5f50d0f",
+        "type": "mqtt-broker",
+        "name": "Hive MQTT",
+        "broker": "broker.hivemq.com",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
