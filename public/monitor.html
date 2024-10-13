@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Unit Monitor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      #map {
+        height: 300px;
+      }
+      .chart-container {
+        height: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="nav-wrapper">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/monitor">Monitor</a></li>
+          <li><a href="/units">Unit List</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <div class="container">
+      <h1 class="center-align">Unit Monitor</h1>
+      <div id="unitInfo">
+        <h2 id="unitId"></h2>
+        <div class="row">
+          <div class="col s12 m6">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">Unit Information</span>
+                <p id="mode"></p>
+                <p id="alarmStatus"></p>
+                <p id="temperature"></p>
+                <p id="speed"></p>
+                <p id="lastUpdated"></p>
+              </div>
+            </div>
+          </div>
+          <div class="col s12 m6">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">Location</span>
+                <div id="map"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col s12 m6">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">Temperature Chart</span>
+                <div class="chart-container">
+                  <canvas id="temperatureChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col s12 m6">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">Speed Chart</span>
+                <div class="chart-container">
+                  <canvas id="speedChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col s12 m6">
+            <button id="alarmButton" class="waves-effect waves-light btn">Trigger Alarm</button>
+          </div>
+          <div class="col s12 m6">
+            <select id="modeSelect" class="browser-default">
+              <option value="" disabled selected>Change Mode</option>
+              <option value="standby">Standby</option>
+              <option value="combat">Combat</option>
+              <option value="patrol">Patrol</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col s12">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">Command History</span>
+              <ul id="commandList" class="collection"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+      let unitId;
+      let temperatureChart;
+      let speedChart;
+      let map;
+      let marker;
+
+      document.addEventListener("DOMContentLoaded", function () {
+        const urlParams = new URLSearchParams(window.location.search);
+        unitId = urlParams.get("unitId");
+
+        if (unitId) {
+          fetchUnitData(unitId);
+          fetchCommandHistory(unitId);
+          setInterval(() => fetchUnitData(unitId), 5000);
+          setInterval(() => fetchCommandHistory(unitId), 5000);
+        } else {
+          document.getElementById("unitInfo").innerHTML = "<p>No unit specified</p>";
+        }
+
+        document.getElementById("alarmButton").addEventListener("click", triggerAlarm);
+        document.getElementById("modeSelect").addEventListener("change", changeMode);
+      });
+
+      function fetchUnitData(unitId) {
+        fetch(`/api/unit/${unitId}/latest`)
+          .then((response) => response.json())
+          .then((data) => {
+            updateUnitInfo(data);
+            updateCharts(data);
+          })
+          .catch((error) => console.error("Error fetching unit data:", error));
+      }
+
+      function updateUnitInfo(data) {
+        document.getElementById("unitId").textContent = `Unit ${data.unitId}`;
+        document.getElementById("mode").textContent = `Mode: ${data.mode}`;
+        document.getElementById("alarmStatus").textContent = `Alarm Status: ${
+          data.alarmStatus ? "Active" : "Inactive"
+        }`;
+        document.getElementById("temperature").textContent = `Temperature: ${data.temperature}°C`;
+        document.getElementById("speed").textContent = `Speed: ${data.speed} km/h`;
+        document.getElementById("lastUpdated").textContent = `Last Updated: ${new Date(
+          data.timestamp
+        ).toLocaleString()}`;
+
+        if (data.gps && data.gps.lat && data.gps.lon) {
+          initMap(data.gps.lat, data.gps.lon);
+        }
+      }
+
+      function initMap(lat, lon) {
+        if (!map) {
+          map = L.map("map").setView([lat, lon], 13);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap contributors",
+          }).addTo(map);
+          marker = L.marker([lat, lon]).addTo(map);
+        } else {
+          map.setView([lat, lon], 13);
+          marker.setLatLng([lat, lon]);
+        }
+      }
+
+      function updateCharts(data) {
+        if (!temperatureChart) {
+          const tempCtx = document.getElementById("temperatureChart").getContext("2d");
+          temperatureChart = new Chart(tempCtx, {
+            type: "line",
+            data: {
+              labels: [],
+              datasets: [
+                {
+                  label: "Temperature (°C)",
+                  data: [],
+                  borderColor: "rgb(255, 99, 132)",
+                  tension: 0.1,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+            },
+          });
+        }
+
+        if (!speedChart) {
+          const speedCtx = document.getElementById("speedChart").getContext("2d");
+          speedChart = new Chart(speedCtx, {
+            type: "line",
+            data: {
+              labels: [],
+              datasets: [
+                {
+                  label: "Speed (km/h)",
+                  data: [],
+                  borderColor: "rgb(54, 162, 235)",
+                  tension: 0.1,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+            },
+          });
+        }
+
+        const timestamp = new Date(data.timestamp).toLocaleTimeString();
+
+        temperatureChart.data.labels.push(timestamp);
+        temperatureChart.data.datasets[0].data.push(data.temperature);
+        if (temperatureChart.data.labels.length > 10) {
+          temperatureChart.data.labels.shift();
+          temperatureChart.data.datasets[0].data.shift();
+        }
+        temperatureChart.update();
+
+        speedChart.data.labels.push(timestamp);
+        speedChart.data.datasets[0].data.push(data.speed);
+        if (speedChart.data.labels.length > 10) {
+          speedChart.data.labels.shift();
+          speedChart.data.datasets[0].data.shift();
+        }
+        speedChart.update();
+      }
+
+      function triggerAlarm() {
+        fetch("/api/unit/command", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            unitId: unitId,
+            command: "triggerAlarm",
+            payload: { status: true },
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Alarm triggered:", data);
+            M.toast({ html: "Alarm triggered successfully" });
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            M.toast({ html: "Error triggering alarm" });
+          });
+      }
+
+      function changeMode() {
+        const newMode = document.getElementById("modeSelect").value;
+        fetch("/api/unit/command", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            unitId: unitId,
+            command: "changeMode",
+            payload: { mode: newMode },
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Mode changed:", data);
+            M.toast({ html: `Mode changed to ${newMode}` });
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            M.toast({ html: "Error changing mode" });
+          });
+      }
+
+      function fetchCommandHistory(unitId) {
+        fetch(`/api/unit/${unitId}/commands`)
+          .then((response) => response.json())
+          .then((commands) => {
+            const commandList = document.getElementById("commandList");
+            commandList.innerHTML = ""; // Clear existing list
+
+            commands.forEach((cmd) => {
+              const li = document.createElement("li");
+              li.className = "collection-item";
+              li.innerHTML = `
+                            <strong>${cmd.command}</strong><br>
+                            Payload: ${JSON.stringify(cmd.commandPayload)}<br>
+                            Time: ${new Date(cmd.timestamp).toLocaleString()}
+                        `;
+              commandList.appendChild(li);
+            });
+          })
+          .catch((error) => console.error("Error fetching command history:", error));
+      }
+    </script>
+  </body>
+</html>

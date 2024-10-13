@@ -1,75 +1,191 @@
-// server.js
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
 const mongoose = require("mongoose");
-const SensorData = require("./models/sensors");
+const bodyParser = require("body-parser");
+const mqtt = require("mqtt");
 const dotenv = require("dotenv");
+const path = require("path");
+
+// Models
+const Unit = require("./models/unit");
+const Log = require("./models/logs");
+const Command = require("./models/command");
 
 dotenv.config();
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
 
-// Connect to the MQTT broker
-const mqtt = require("mqtt");
-const client = mqtt.connect("mqtt://broker.hivemq.com:1883");
-const topic = "deakin/amir";
+const MONGO_URI = process.env.MONGO_URI;
+const PORT = process.env.PORT || 3000;
 
-client.on("connect", () => {
-  client.subscribe(topic, (err) => {
-    if (err) {
-      console.error("Error subscribing to topic:", err);
-    } else {
-      console.log("Subscribed to topic:", topic);
-    }
-  });
-});
-
-// Connect to MongoDB using Mongoose
-const mongoUrl = process.env.MONGO_URI;
-
-mongoose.connect(mongoUrl, {
+// Connect to MongoDB
+mongoose.connect(MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
 
-client.on("message", async (topic, message) => {
-  const data = JSON.parse(message.toString());
-  console.log("Received message from MQTT broker:", data);
+const db = mongoose.connection;
+db.on("error", console.error.bind(console, "MongoDB connection error:"));
+db.once("open", () => console.log("Connected to MongoDB"));
 
-  // Create a new sensor data document
-  const newSensorData = new SensorData({
-    sensorId: data.sensorId,
-    value: data.value,
-    latitude: data.location?.latitude,
-    longitude: data.location?.longitude,
-    timestamp: new Date(),
-    sensorName: data.sensorName,
-  });
+// MQTT Client Setup
+const mqttClient = mqtt.connect("mqtt://broker.hivemq.com");
+mqttClient.on("connect", () => {
+  console.log("Connected to MQTT broker");
+  mqttClient.subscribe("military/+/data");
+});
+mqttClient.on("message", handleMqttMessage);
 
-  // Save the data to MongoDB
+// Express App Setup
+const app = express();
+app.use(bodyParser.json());
+
+// MQTT Message Handler: Store incoming messages as logs
+async function handleMqttMessage(topic, message) {
   try {
-    await newSensorData.save();
-    console.log("Sensor data saved to MongoDB:", newSensorData);
-  } catch (err) {
-    console.error("Error saving sensor data:", err);
+    const payload = JSON.parse(message.toString());
+    console.log(`[MQTT] [${payload.unitId}] Received data: ${message}`);
+
+    const newLog = new Log(payload);
+    await newLog.save();
+
+    console.log(`[MQTT] [${payload.unitId}] Data saved to logs`);
+  } catch (error) {
+    console.error("[MQTT] Error processing message:", error);
   }
+}
 
-  // Emit the sensor data to all connected clients via Socket.io
-  io.emit("sensorData", data);
+// Register a New Unit
+app.post("/api/unit/register", async (req, res) => {
+  try {
+    const { unitId, description } = req.body;
+
+    if (!unitId) {
+      return res.status(400).json({ error: "unitId is required" });
+    }
+
+    const newUnit = new Unit({ unitId, description });
+    await newUnit.save();
+
+    console.log(`[HTTP] [${unitId}] Unit registered: ${JSON.stringify(req.body)}`);
+    res.status(201).json({ message: "Unit registered successfully", unit: newUnit });
+  } catch (error) {
+    if (error.code === 11000) {
+      res.status(409).json({ error: "Unit ID already exists" });
+    } else {
+      console.error("[HTTP] Error registering unit:", error);
+      res.status(500).json({ error: "Failed to register unit" });
+    }
+  }
 });
 
-// Serve static files (for the frontend)
-app.use(express.static("public"));
+// Save Log Data via HTTP
+app.post("/api/unit/log", async (req, res) => {
+  try {
+    const logData = req.body;
 
-io.on("connection", (socket) => {
-  console.log("A user connected");
-  socket.on("disconnect", () => {
-    console.log("User disconnected");
-  });
+    const newLog = new Log(logData);
+    await newLog.save();
+
+    console.log(`[HTTP] [${logData.unitId}] Log saved: ${JSON.stringify(logData)}`);
+    res.status(200).json({ message: "Log data saved successfully" });
+  } catch (error) {
+    console.error("[HTTP] Error saving log data:", error);
+    res.status(500).json({ error: "Failed to save log data" });
+  }
 });
 
-server.listen(3000, () => {
-  console.log("Server is running on http://localhost:3000");
+// Issue Command to Unit via MQTT and Save to Command Collection
+app.post("/api/unit/command", async (req, res) => {
+  try {
+    const { unitId, command, payload } = req.body;
+
+    if (!unitId || !command) {
+      return res.status(400).json({ error: "Missing unitId or command" });
+    }
+
+    // MQTT topic for the specific command
+    const topic = `military/${unitId}/actuators/${command}`;
+    mqttClient.publish(topic, JSON.stringify(payload));
+
+    console.log(`[HTTP] [${unitId}] Command sent: ${command} - Payload: ${JSON.stringify(payload)}`);
+
+    // Save the command to the Command collection
+    const newCommand = new Command({ unitId, command, commandPayload: payload });
+    await newCommand.save();
+
+    res.status(200).json({ message: "Command sent successfully", unitId, command, payload });
+  } catch (error) {
+    console.error("[HTTP] Error sending command:", error);
+    res.status(500).json({ error: "Failed to send command" });
+  }
+});
+
+// Fetch All Registered Units
+app.get("/api/units", async (req, res) => {
+  try {
+    const units = await Unit.find({});
+    res.status(200).json(units);
+  } catch (error) {
+    console.error("[HTTP] Error fetching units:", error);
+    res.status(500).json({ error: "Failed to fetch units" });
+  }
+});
+
+app.get("/api/unit/:unitId", async (req, res) => {
+  try {
+    const { unitId } = req.params;
+
+    const unit = await Unit.findOne({ unitId }).exec();
+    if (!unit) {
+      return res.status(404).json({ error: `Unit not found for ID: ${unitId}` });
+    }
+
+    res.status(200).json(unit);
+  } catch (error) {
+    console.error("[HTTP] Error fetching unit:", error);
+    res.status(500).json({ error: "Failed to fetch unit" });
+  }
+});
+
+// Fetch Latest Data for a Specific Unit
+app.get("/api/unit/:unitId/latest", async (req, res) => {
+  try {
+    const { unitId } = req.params;
+
+    const latestLog = await Log.findOne({ unitId }).sort({ timestamp: -1 }).exec();
+
+    if (!latestLog) {
+      return res.status(404).json({ error: `No data found for unitId: ${unitId}` });
+    }
+
+    res.status(200).json(latestLog);
+  } catch (error) {
+    console.error(`[HTTP] Error fetching latest data for ${req.params.unitId}:`, error);
+    res.status(500).json({ error: "Failed to fetch latest unit data" });
+  }
+});
+
+app.get("/api/unit/:unitId/commands", async (req, res) => {
+  try {
+    const { unitId } = req.params;
+
+    const commands = await Command.find({ unitId }).exec();
+    res.status(200).json(commands);
+  } catch (error) {
+    console.error(`[HTTP] Error fetching commands for ${req.params.unitId}:`, error);
+    res.status(500).json({ error: "Failed to fetch commands" });
+  }
+});
+
+// Route to Unit List Page (index.html)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Route to Unit Monitor Page (monitor.html)
+app.get("/monitor", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "monitor.html"));
+});
+
+// Start the Server
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
