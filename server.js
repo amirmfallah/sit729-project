@@ -4,6 +4,7 @@ const bodyParser = require("body-parser");
 const mqtt = require("mqtt");
 const dotenv = require("dotenv");
 const path = require("path");
+const helmet = require("helmet");
 
 // Models
 const Unit = require("./models/unit");
@@ -36,6 +37,7 @@ mqttClient.on("message", handleMqttMessage);
 
 // Express App Setup
 const app = express();
+app.use(helmet());
 app.use(bodyParser.json());
 
 // MQTT Message Handler: Store incoming messages as logs
