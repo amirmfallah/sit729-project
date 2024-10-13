@@ -89,10 +89,10 @@ class MilitaryUnit {
 
       if (topic.endsWith("/actuators/mode")) {
         this.switchMode(payload.mode);
-        this.sendAcknowledgment("mode", payload.mode);
-      } else if (topic.endsWith("/actuators/alarm")) {
+        this.sendAcknowledgment(payload.id, "mode", payload.mode);
+      } else if (topic.endsWith("/actuators/triggerAlarm")) {
         this.triggerAlarm(payload.trigger);
-        this.sendAcknowledgment("alarm", payload.trigger ? "triggered" : "reset");
+        this.sendAcknowledgment(payload.id, "alarm", payload.status ? "triggered" : "reset");
       }
     } catch (err) {
       console.error(`[${this.unitId}] Invalid message format: ${err}`);
@@ -137,8 +137,10 @@ class MilitaryUnit {
   }
 
   // Send acknowledgment after processing an actuator command
-  sendAcknowledgment(type, status) {
+  sendAcknowledgment(id, type, status) {
+    console.log(`[${this.unitId}] Sending acknowledgment for ${id}: ${status} (${type})`);
     const ackMessage = {
+      id,
       unitId: this.unitId,
       type,
       status,

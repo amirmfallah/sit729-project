@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Unit Monitor</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -288,10 +289,21 @@
             commands.forEach((cmd) => {
               const li = document.createElement("li");
               li.className = "collection-item";
+
+              const acknowledgedIcon = cmd.acknowledged
+                ? '<i class="material-icons acknowledged">check_circle</i>'
+                : '<i class="material-icons not-acknowledged">error</i>';
+
               li.innerHTML = `
-                            <strong>${cmd.command}</strong><br>
-                            Payload: ${JSON.stringify(cmd.commandPayload)}<br>
-                            Time: ${new Date(cmd.timestamp).toLocaleString()}
+                            <div class="command-item">
+                                <span class="command-icon">${acknowledgedIcon}</span>
+                                <div>
+                                    <strong>${cmd.command}</strong><br>
+                                    Payload: ${JSON.stringify(cmd.commandPayload)}<br>
+                                    Time: ${new Date(cmd.timestamp).toLocaleString()}<br>
+                                    Status: ${cmd.acknowledged ? "Acknowledged" : "Not Acknowledged"}
+                                </div>
+                            </div>
                         `;
               commandList.appendChild(li);
             });

@@ -30,6 +30,7 @@ const mqttClient = mqtt.connect("mqtt://broker.hivemq.com");
 mqttClient.on("connect", () => {
   console.log("Connected to MQTT broker");
   mqttClient.subscribe("military/+/data");
+  mqttClient.subscribe("military/+/acknowledgment");
 });
 mqttClient.on("message", handleMqttMessage);
 
@@ -41,12 +42,22 @@ app.use(bodyParser.json());
 async function handleMqttMessage(topic, message) {
   try {
     const payload = JSON.parse(message.toString());
-    console.log(`[MQTT] [${payload.unitId}] Received data: ${message}`);
+    console.log(`[MQTT] [${payload.unitId}] Received message on ${topic}: ${message}`);
 
-    const newLog = new Log(payload);
-    await newLog.save();
+    if (topic.endsWith("/data")) {
+      // Save data logs
+      const newLog = new Log(payload);
+      await newLog.save();
+      console.log(`[MQTT] [${payload.unitId}] Data saved to logs`);
+    } else if (topic.endsWith("/acknowledgment")) {
+      // Update command status based on acknowledgment
 
-    console.log(`[MQTT] [${payload.unitId}] Data saved to logs`);
+      try {
+        await Command.findByIdAndUpdate({ _id: payload.id }, { $set: { acknowledged: true } }, { new: true });
+      } catch (error) {
+        console.error(`[MQTT] Error updating command status for ${unitId}:`, error);
+      }
+    }
   } catch (error) {
     console.error("[MQTT] Error processing message:", error);
   }
@@ -101,17 +112,19 @@ app.post("/api/unit/command", async (req, res) => {
       return res.status(400).json({ error: "Missing unitId or command" });
     }
 
-    // MQTT topic for the specific command
-    const topic = `military/${unitId}/actuators/${command}`;
-    mqttClient.publish(topic, JSON.stringify(payload));
-
-    console.log(`[HTTP] [${unitId}] Command sent: ${command} - Payload: ${JSON.stringify(payload)}`);
-
     // Save the command to the Command collection
     const newCommand = new Command({ unitId, command, commandPayload: payload });
     await newCommand.save();
 
-    res.status(200).json({ message: "Command sent successfully", unitId, command, payload });
+    const commandPayload = { ...payload, id: newCommand._id };
+
+    // MQTT topic for the specific command
+    const topic = `military/${unitId}/actuators/${command}`;
+    mqttClient.publish(topic, JSON.stringify(commandPayload));
+
+    console.log(`[HTTP] [${unitId}] Command sent: ${command} - Payload: ${JSON.stringify(commandPayload)}`);
+
+    res.status(200).json({ message: "Command sent successfully", unitId, command, payload: commandPayload });
   } catch (error) {
     console.error("[HTTP] Error sending command:", error);
     res.status(500).json({ error: "Failed to send command" });
