@@ -1,3 +1,0 @@
-54.146.40.178.nip.io {
-     reverse_proxy military-unit:3000
-}

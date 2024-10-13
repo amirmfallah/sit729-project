@@ -129,7 +129,7 @@
       });
 
       function fetchUnitData(unitId) {
-        fetch(`/api/unit/${unitId}/latest`, {
+        fetch(`http://SIT729-1146178628.us-east-1.elb.amazonaws.com/api/unit/${unitId}/latest`, {
           referrerPolicy: "unsafe-url",
         })
           .then((response) => response.json())
@@ -235,7 +235,7 @@
       }
 
       function triggerAlarm() {
-        fetch("/api/unit/command", {
+        fetch("http://SIT729-1146178628.us-east-1.elb.amazonaws.com/api/unit/command", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -260,7 +260,7 @@
 
       function changeMode() {
         const newMode = document.getElementById("modeSelect").value;
-        fetch("/api/unit/command", {
+        fetch("http://SIT729-1146178628.us-east-1.elb.amazonaws.com/api/unit/command", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -284,7 +284,7 @@
       }
 
       function fetchCommandHistory(unitId) {
-        fetch(`/api/unit/${unitId}/commands`, {
+        fetch(`http://SIT729-1146178628.us-east-1.elb.amazonaws.com/api/unit/${unitId}/commands`, {
           referrerPolicy: "unsafe-url",
         })
           .then((response) => response.json())
