@@ -1,0 +1,15 @@
+{
+    on_demand_tls {
+        ask http://military-unit:3000/tls-check
+        burst 5
+        interval 2m
+    }
+}
+
+https:// {
+    tls {
+        on_demand
+    }
+
+    reverse_proxy military-unit:3000
+}

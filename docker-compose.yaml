@@ -2,12 +2,34 @@ version: "3.9"
 
 services:
   military-unit:
-    image: military-unit:1
+    image: military-unit
     container_name: military-unit
     build:
       context: .
       dockerfile: Dockerfile
     env_file:
       - .env
+    networks:
+      - military-network
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
     ports:
-      - "80:3000"
+      - "443:443"
+      - "80:80"
+    networks:
+      - military-network
+    depends_on:
+      - military-unit
+
+networks:
+  military-network:
+
+volumes:
+  caddy_data:
+  caddy_config:

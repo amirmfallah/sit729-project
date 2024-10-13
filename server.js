@@ -73,6 +73,9 @@ app.use(
   })
 );
 app.use(bodyParser.json());
+app.get("/tls-check", (req, res) => {
+  res.status(200).json({ message: "TLS Check Passed" });
+});
 
 // MQTT Message Handler: Store incoming messages as logs
 async function handleMqttMessage(topic, message) {
