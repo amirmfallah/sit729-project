@@ -29,6 +29,6 @@ class SimulationClient {
 
 const numUnits = 5;
 const brokerUrl = "mqtt://broker.hivemq.com";
-const apiUrl = "http://localhost:3000";
+const apiUrl = "http://sit729-1604877711.us-east-1.elb.amazonaws.com";
 
 new SimulationClient(numUnits, brokerUrl, apiUrl);
