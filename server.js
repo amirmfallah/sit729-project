@@ -37,7 +37,41 @@ mqttClient.on("message", handleMqttMessage);
 
 // Express App Setup
 const app = express();
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "*.googleapis.com",
+          "*.jsdelivr.net",
+          "*.jquery.com",
+          "*.cloudflare.com",
+          "*.chartjs.org",
+          "unpkg.com",
+          "*.openstreetmap.org",
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "*.googleapis.com",
+          "*.jsdelivr.net",
+          "*.jquery.com",
+          "*.cloudflare.com",
+          "*.chartjs.org",
+          "unpkg.com",
+          "*.openstreetmap.org",
+        ],
+        baseUri: ["'self'"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "*.openstreetmap.org", "*.tile.openstreetmap.org", "*.cloudflare.com", "unpkg.com"],
+      },
+    },
+  })
+);
 app.use(bodyParser.json());
 
 // MQTT Message Handler: Store incoming messages as logs

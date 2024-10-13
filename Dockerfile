@@ -1,20 +1,20 @@
 # Use the official Node.js image from Docker Hub
-FROM node:14
+FROM node:20
 
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy the package.json and package-lock.json to the working directory
-COPY package*.json ./
+# Copy package.json and package-lock.json first (for caching)
+COPY package*.json /app/
 
-# Install all project dependencies
+# Install dependencies
 RUN npm install
 
-# Copy all source code files to the container
-COPY . .
+# Copy all source files to the container's /app directory
+COPY . /app/
 
-# Expose the port that your Express app is running on
+# Expose the port that your Express app will use
 EXPOSE 3000
 
-# Start the Express server
+# Start the server
 CMD ["node", "server.js"]
